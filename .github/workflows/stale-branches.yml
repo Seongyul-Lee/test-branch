@@ -1,0 +1,32 @@
+name: Cleanup Stale Branches
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # 매주 월요일 00:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (실제 삭제하지 않음)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Delete stale branches
+        uses: cbrgm/cleanup-stale-branches-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # 첫 운영은 dry-run: true로 시작 — 1주 모니터링 후 false로 전환
+          dry-run: ${{ github.event.inputs.dry_run || 'true' }}
+          ignore-branches: 'main,master,develop'
+          last-commit-age-days: 30
