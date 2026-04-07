@@ -1,0 +1,29 @@
+# lefthook.yml — 클라이언트 측 git hook 설정
+#
+# 설치:
+#   1. lefthook 설치 (https://github.com/evilmartians/lefthook)
+#      - macOS: brew install lefthook
+#      - Windows: scoop install lefthook
+#      - Node 프로젝트: npm install -D lefthook
+#   2. 저장소에서 1회: lefthook install
+#
+# 검증되는 항목:
+#   - pre-push: 브랜치명 규칙 + main 직접 push 차단
+#   - commit-msg: Conventional Commits 형식
+
+# NOTE: 인라인 multi-line 스크립트는 Git Bash on Windows에서 lefthook이
+# 큰따옴표/백슬래시를 mangle하는 버그가 있다. 모든 검증 로직은 scripts/
+# 하위 파일로 추출해 한 줄 호출로 우회한다.
+pre-push:
+  parallel: true
+  commands:
+    no-direct-main-push:
+      run: bash scripts/check-branch.sh no-main-push
+
+    branch-name-check:
+      run: bash scripts/check-branch.sh name
+
+commit-msg:
+  commands:
+    conventional-commits:
+      run: bash scripts/check-commit-msg.sh {1}
