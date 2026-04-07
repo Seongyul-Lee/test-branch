@@ -1,0 +1,13 @@
+# 줄바꿈 강제: 쉘 스크립트와 CI 자산은 LF로 저장
+# (Linux GitHub Actions runner에서 실행되어야 하므로 CRLF 금지)
+
+*.sh        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.bash      text eol=lf
+
+# 일반 텍스트 파일은 OS 기본값 사용
+*.md        text
+*.txt       text
+.gitignore  text
+.gitattributes text
