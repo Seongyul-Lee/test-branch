@@ -6,17 +6,29 @@
 #   ./scripts/new-branch.sh <type>             # type만 지정, name은 프롬프트로 입력
 #   ./scripts/new-branch.sh <type> <name>      # 인자 모드 (CI/스크립트 호환)
 #
-#   type: feat | fix | refactor | docs | research | data | chore
+#   type: feat | fix | refactor | docs | research | data | chore | remove
 #   name: kebab-case (대소문자/공백/언더스코어는 자동 변환)
 
 set -euo pipefail
 
-ALLOWED_TYPES=(feat fix refactor docs research data chore)
+# 타입 배열과 한국어 설명 배열은 인덱스가 정확히 일치해야 한다.
+# 순서를 바꾸거나 항목을 추가할 때 두 배열을 함께 수정할 것.
+ALLOWED_TYPES=(feat fix refactor docs research data chore remove)
+ALLOWED_TYPE_DESCS=(
+  "신규 기능"
+  "버그 수정 / hotfix"
+  "동작 변경 없는 리팩터"
+  "문서만 변경"
+  "탐색·실험·리서치"
+  "DB 스키마 / 마이그레이션"
+  "빌드/CI/설정 변경"
+  "파일·기능 제거"
+)
 
 print_usage() {
   echo "Usage: $0 [<type>] [<name>]"
   echo "  인자가 빠지면 인터랙티브 모드로 진입합니다 (TTY 필요)."
-  echo "  type: feat | fix | refactor | docs | research | data | chore"
+  echo "  type: feat | fix | refactor | docs | research | data | chore | remove"
   echo "  name: kebab-case (자동 변환)"
 }
 
@@ -54,9 +66,9 @@ select_type_interactive() {
     printf '브랜치 type을 선택하세요 (↑↓ 이동, Enter 확정):\n' >&2
     for i in "${!ALLOWED_TYPES[@]}"; do
       if [[ $i -eq $selected ]]; then
-        printf '  \033[1;36m▶ %s\033[0m\n' "${ALLOWED_TYPES[$i]}" >&2
+        printf '  \033[1;36m▶ %-10s %s\033[0m\n' "${ALLOWED_TYPES[$i]}" "${ALLOWED_TYPE_DESCS[$i]}" >&2
       else
-        printf '    %s\n' "${ALLOWED_TYPES[$i]}" >&2
+        printf '    %-10s %s\n' "${ALLOWED_TYPES[$i]}" "${ALLOWED_TYPE_DESCS[$i]}" >&2
       fi
     done
 
@@ -98,7 +110,7 @@ done
 
 if [[ $TYPE_VALID -eq 0 ]]; then
   echo "❌ type '$TYPE'은 허용되지 않습니다."
-  echo "   허용: feat | fix | refactor | docs | research | data | chore"
+  echo "   허용: feat | fix | refactor | docs | research | data | chore | remove"
   exit 1
 fi
 

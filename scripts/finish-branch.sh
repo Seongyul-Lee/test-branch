@@ -1,12 +1,25 @@
 #!/usr/bin/env bash
 # finish-branch.sh — 현재 브랜치를 push하고 GitHub PR을 자동 생성
 #
-# Usage: ./scripts/finish-branch.sh
+# Usage: ./scripts/finish-branch.sh [--no-pr]
+#   --no-pr   push만 수행하고 PR 생성은 건너뜀
 
 set -euo pipefail
 
-# gh CLI 설치 확인
-if ! command -v gh >/dev/null 2>&1; then
+NO_PR=0
+for arg in "$@"; do
+  case "$arg" in
+    --no-pr) NO_PR=1 ;;
+    *)
+      echo "❌ 알 수 없는 인자: $arg"
+      echo "   Usage: $0 [--no-pr]"
+      exit 1
+      ;;
+  esac
+done
+
+# gh CLI 설치 확인 (--no-pr 시 생략)
+if [[ $NO_PR -eq 0 ]] && ! command -v gh >/dev/null 2>&1; then
   echo "❌ GitHub CLI(gh)가 설치되어 있지 않습니다."
   echo "   설치: https://cli.github.com/"
   echo ""
@@ -27,10 +40,10 @@ if [[ "$BRANCH" == "main" ]]; then
 fi
 
 # 브랜치명 규칙 검증 (한 번 더 안전망)
-PATTERN="^(feat|fix|refactor|docs|research|data|chore)/[a-z0-9][a-z0-9-]*$"
+PATTERN="^(feat|fix|refactor|docs|research|data|chore|remove)/[a-z0-9][a-z0-9-]*$"
 if [[ ! "$BRANCH" =~ $PATTERN ]]; then
   echo "❌ 브랜치명 '$BRANCH'이 규칙을 위반합니다."
-  echo "   올바른 형식: feat/my-feature, fix/bug-name, data/schema-v3 등"
+  echo "   올바른 형식: feat/my-feature, fix/bug-name, data/schema-v3, remove/unused-asset 등"
   echo "   브랜치 이름 변경: git branch -m <type>/<올바른-이름>"
   exit 1
 fi
@@ -61,6 +74,13 @@ fi
 # push
 echo "📤 원격에 push 중: $BRANCH"
 git push -u origin "$BRANCH"
+
+if [[ $NO_PR -eq 1 ]]; then
+  echo ""
+  echo "✅ push 완료 (--no-pr: PR 생성을 건너뛰었습니다)."
+  echo "   나중에 PR을 만들려면: gh pr create --fill-first"
+  exit 0
+fi
 
 # PR 생성
 # --fill-first: 커밋이 여러 개일 때 첫 커밋 메시지를 PR 제목/본문으로 사용.

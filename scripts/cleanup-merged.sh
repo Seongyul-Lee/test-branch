@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # cleanup-merged.sh — 머지된 로컬 브랜치 + 원격에서 사라진 브랜치를 일괄 삭제
 #
-# Usage: ./scripts/cleanup-merged.sh
+# Usage:
+#   ./scripts/cleanup-merged.sh                       # 검출된 모든 머지된 브랜치 삭제
+#   ./scripts/cleanup-merged.sh --exclude <pattern>   # 패턴 일치 브랜치는 제외 (반복 가능)
+#   ./scripts/cleanup-merged.sh --exclude feat/keep --exclude 'wip-*'
 #
 # 정리 대상은 세 가지 신호 중 하나라도 만족하는 로컬 브랜치:
 #   1) git branch --merged main          — 일반 머지로 main에 흡수된 브랜치
@@ -14,6 +17,51 @@
 set -euo pipefail
 
 PROTECTED_BRANCHES="main master develop"
+
+# --exclude 패턴 누적 (bash glob 문법: *, ?, [abc] 지원)
+EXCLUDE_PATTERNS=()
+
+print_usage() {
+  cat <<'USAGE'
+Usage: ./scripts/cleanup-merged.sh [--exclude <pattern>]...
+
+Options:
+  --exclude <pattern>   삭제 대상에서 제외할 브랜치명 패턴.
+                        bash glob(*, ?, [...])을 지원하며 여러 번 사용 가능.
+                        예:
+                          --exclude feat/keep-this        (정확 일치)
+                          --exclude 'feat/wip-*'          (prefix 매칭)
+                          --exclude 'data/*'              (data 브랜치 전부 제외)
+  -h, --help            이 메시지를 표시하고 종료
+USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --exclude)
+      if [[ -z "${2:-}" ]]; then
+        echo "❌ --exclude는 패턴 인자가 필요합니다." >&2
+        print_usage >&2
+        exit 1
+      fi
+      EXCLUDE_PATTERNS+=("$2")
+      shift 2
+      ;;
+    --exclude=*)
+      EXCLUDE_PATTERNS+=("${1#*=}")
+      shift
+      ;;
+    -h|--help)
+      print_usage
+      exit 0
+      ;;
+    *)
+      echo "❌ 알 수 없는 인자: $1" >&2
+      print_usage >&2
+      exit 1
+      ;;
+  esac
+done
 
 # main 최신화
 echo "🔍 main 브랜치 최신화 중..."
@@ -67,14 +115,76 @@ fi
 # 합치고 중복 제거
 ALL_TO_DELETE=$(printf "%s\n%s\n%s\n" "$MERGED" "$GONE" "$PR_MERGED" | sort -u | sed '/^$/d')
 
+# --exclude 패턴 적용 (bash glob 매칭)
+EXCLUDED_BRANCHES=""
+if [[ ${#EXCLUDE_PATTERNS[@]} -gt 0 && -n "$ALL_TO_DELETE" ]]; then
+  FILTERED=""
+  while IFS= read -r b; do
+    [[ -z "$b" ]] && continue
+    matched=0
+    for pat in "${EXCLUDE_PATTERNS[@]}"; do
+      # bash 내장 glob 매칭 — $pat은 인용하지 않아야 패턴으로 해석됨
+      if [[ "$b" == $pat ]]; then
+        matched=1
+        break
+      fi
+    done
+    if [[ $matched -eq 1 ]]; then
+      EXCLUDED_BRANCHES+="$b"$'\n'
+    else
+      FILTERED+="$b"$'\n'
+    fi
+  done <<< "$ALL_TO_DELETE"
+  ALL_TO_DELETE=$(printf '%s' "$FILTERED" | sed '/^$/d')
+fi
+
 if [[ -z "$ALL_TO_DELETE" ]]; then
-  echo "✅ 정리할 머지된 브랜치가 없습니다."
+  if [[ -n "$EXCLUDED_BRANCHES" ]]; then
+    echo "✅ --exclude로 모든 후보가 제외되어 삭제할 브랜치가 없습니다."
+    echo "   제외됨:"
+    printf '%s' "$EXCLUDED_BRANCHES" | sed '/^$/d' | sed 's/^/     ⏭  /'
+  else
+    echo "✅ 정리할 머지된 브랜치가 없습니다."
+  fi
   exit 0
 fi
 
+# 각 브랜치의 검출 사유를 inline으로 표시 — 사용자가 y/N 결정 직전에
+# "왜 이 브랜치가 검출됐는지" 즉시 파악할 수 있도록.
+# 한 브랜치가 여러 신호에 매칭될 수 있으므로 우선순위를 정해 한 줄에
+# 가장 구체적인 사유 하나만 표기 (실제 삭제 분기 로직과 동일 우선순위).
+detect_reason() {
+  local branch="$1"
+  if echo "$MERGED" | grep -qx "$branch"; then
+    echo "merged"
+  elif echo "$PR_MERGED" | grep -qx "$branch"; then
+    echo "PR merged on GitHub"
+  else
+    echo "gone from remote"
+  fi
+}
+
+# 가장 긴 브랜치명 폭에 맞춰 컬럼 정렬
+MAX_W=0
+while IFS= read -r b; do
+  [[ -z "$b" ]] && continue
+  [[ ${#b} -gt $MAX_W ]] && MAX_W=${#b}
+done <<< "$ALL_TO_DELETE"
+COL_W=$((MAX_W + 4))
+
 echo ""
 echo "다음 브랜치들이 삭제됩니다:"
-echo "$ALL_TO_DELETE" | sed 's/^/  /'
+while IFS= read -r b; do
+  [[ -z "$b" ]] && continue
+  printf "  %-${COL_W}s(%s)\n" "$b" "$(detect_reason "$b")"
+done <<< "$ALL_TO_DELETE"
+
+if [[ -n "$EXCLUDED_BRANCHES" ]]; then
+  echo ""
+  echo "⏭  --exclude로 제외됨:"
+  printf '%s' "$EXCLUDED_BRANCHES" | sed '/^$/d' | sed 's/^/     /'
+fi
+
 echo ""
 read -r -p "진행하시겠습니까? [y/N]: " CONFIRM
 

@@ -28,11 +28,11 @@ case "$MODE" in
     if [[ "$BRANCH" == "main" || "$BRANCH" == "master" ]]; then
       exit 0
     fi
-    PATTERN="^(feat|fix|refactor|docs|research|data|chore)/[a-z0-9][a-z0-9-]*$"
+    PATTERN="^(feat|fix|refactor|docs|research|data|chore|remove)/[a-z0-9][a-z0-9-]*$"
     if ! echo "$BRANCH" | grep -Eq "$PATTERN"; then
       echo "❌ 브랜치명 '$BRANCH'이 규칙을 위반합니다."
       echo "   올바른 형식: feat/my-feature, fix/bug-name, data/schema-v3 등"
-      echo "   허용 type: feat | fix | refactor | docs | research | data | chore"
+      echo "   허용 type: feat | fix | refactor | docs | research | data | chore | remove"
       echo "   브랜치 이름 변경: git branch -m <type>/<올바른-이름>"
       exit 1
     fi

@@ -20,6 +20,7 @@ ASSUME_YES=0
 #   manual              — 자동 설치 매트릭스에 없어 URL 안내만 함
 #   missing             — 검사 안 함 (예외 케이스)
 STATUS_GH="missing"
+STATUS_GH_AUTH="missing"
 STATUS_LEFTHOOK="missing"
 STATUS_HOOKS="missing"
 STATUS_ALIASES="missing"
@@ -187,6 +188,35 @@ ensure_tool() {
 }
 
 # ----------------------------------------------------------------------------
+# GitHub CLI 인증 상태 점검 (advisory — 자동 로그인 하지 않음)
+# ----------------------------------------------------------------------------
+# gh 설치 직후 github.com 인증 여부만 확인한다. 미인증이면 안내 메시지만
+# 출력하고 종료 코드에는 영향 없음. gh auth login은 브라우저를 여는
+# 인터랙티브 명령이라 bootstrap 내부에서 자동 실행하면 --yes 모드 및
+# 비대화형 환경과 충돌하므로 수동 실행을 안내만 한다.
+
+check_gh_auth() {
+  if ! command -v gh >/dev/null 2>&1; then
+    STATUS_GH_AUTH="skipped-no-gh"
+    return 0
+  fi
+
+  echo "🔍 GitHub 인증 상태 확인 중..."
+
+  if gh auth status >/dev/null 2>&1; then
+    STATUS_GH_AUTH="ok"
+    echo "✅ GitHub 인증 OK"
+    return 0
+  fi
+
+  STATUS_GH_AUTH="not-authed"
+  echo "⚠️  gh가 설치되어 있지만 GitHub 인증이 되어 있지 않습니다."
+  echo "   다음 명령으로 인증하세요: gh auth login"
+  echo "   GitHub 인증 후 다음 명령을 다시 실행하세요: ./scripts/bootstrap.sh"
+  return 0
+}
+
+# ----------------------------------------------------------------------------
 # lefthook 훅 설치 (.git/hooks/*)
 # ----------------------------------------------------------------------------
 
@@ -220,7 +250,7 @@ ensure_lefthook_hooks() {
 # ----------------------------------------------------------------------------
 # Windows의 core.autocrlf=true 와 .gitattributes 부재가 결합하면
 # 키트의 .sh/.yml 파일이 수정한 적 없는데도 git status에 'M'으로 뜨는
-# 유령 modified 현상이 발생한다 (SETUP_GUIDE.md 트러블슈팅 참고).
+# 유령 modified 현상이 발생한다 (TROUBLESHOOTING.md 참고).
 # 강제 차단이 아닌 advisory warning — 종료 코드에 영향 없음.
 
 check_gitattributes() {
@@ -235,7 +265,7 @@ check_gitattributes() {
     STATUS_GITATTRIBUTES="not-found"
     echo "⚠️  .gitattributes 파일이 없습니다."
     echo "   Windows 팀원에게 .yml/.sh 파일이 '유령 modified'로 뜨는 문제가 발생할 수 있습니다."
-    echo "   해결: 키트의 .gitattributes를 복사하세요 (SETUP_GUIDE.md Phase 2-1)."
+    echo "   해결: 키트의 .gitattributes를 복사하세요 (1-ADMIN_SETUP.md Step 2-1)."
     return 0
   fi
 
@@ -257,7 +287,7 @@ check_gitattributes() {
     STATUS_GITATTRIBUTES="incomplete"
     echo "⚠️  .gitattributes에 다음 규칙이 누락되었습니다: ${missing_rules[*]}"
     echo "   각 패턴에 'eol=lf'가 적용되어야 Windows에서 유령 modified가 방지됩니다."
-    echo "   참고: SETUP_GUIDE.md 트러블슈팅 'CRLF 관련 에러'"
+    echo "   참고: TROUBLESHOOTING.md 'CRLF 관련 에러 / 유령 modified 표시 (Windows)'"
     return 0
   fi
 
@@ -313,9 +343,11 @@ format_status() {
     declined)           echo "❌ 사용자 거절" ;;
     manual)             echo "❌ 수동 설치 필요 (URL 안내됨)" ;;
     skipped-no-lefthook) echo "⏭  lefthook 미설치로 건너뜀" ;;
+    skipped-no-gh)      echo "⏭  gh 미설치로 건너뜀" ;;
     skipped-no-git)     echo "⏭  git repo가 아니라서 건너뜀" ;;
     failed)             echo "❌ 실패" ;;
     ok)                 echo "✅ OK" ;;
+    not-authed)         echo "⚠️  미인증 (위 경고 참고)" ;;
     incomplete)         echo "⚠️  핵심 규칙 누락 (위 경고 참고)" ;;
     not-found)          echo "⚠️  파일 없음 (위 경고 참고)" ;;
     missing)            echo "—" ;;
@@ -329,6 +361,7 @@ print_summary() {
   echo "📋 부트스트랩 결과"
   echo "============================================================"
   printf "  %-14s %s\n" "gh"             "$(format_status "$STATUS_GH")"
+  printf "  %-14s %s\n" "gh-auth"        "$(format_status "$STATUS_GH_AUTH")"
   printf "  %-14s %s\n" "lefthook"       "$(format_status "$STATUS_LEFTHOOK")"
   printf "  %-14s %s\n" "hooks"          "$(format_status "$STATUS_HOOKS")"
   printf "  %-14s %s\n" "aliases"        "$(format_status "$STATUS_ALIASES")"
@@ -415,6 +448,9 @@ main() {
   echo "🔍 의존성 확인 중..."
   ensure_tool "gh"       "$pm" || true
   ensure_tool "lefthook" "$pm" || true
+  echo ""
+
+  check_gh_auth || true
   echo ""
 
   ensure_lefthook_hooks || true

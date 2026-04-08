@@ -29,15 +29,17 @@ case "$FIRST_LINE" in
 esac
 
 # Conventional Commits 형식 검증
-PATTERN="^(feat|fix|refactor|docs|research|data|chore)(\(.+\))?!?: .+"
+# 한글 커밋 메시지도 허용한다 ('.+' 는 UTF-8 호환, subjectPattern과 일관).
+PATTERN="^(feat|fix|refactor|docs|research|data|chore|remove)(\(.+\))?!?: .+"
 if ! echo "$FIRST_LINE" | grep -Eq "$PATTERN"; then
   echo "❌ 커밋 메시지가 Conventional Commits 형식이 아닙니다."
   echo "   첫 줄: $FIRST_LINE"
   echo ""
-  echo "   올바른 예:"
-  echo "     feat: add order router"
-  echo "     fix(api): handle null response"
-  echo "     data: add orderbook v3 migration"
-  echo "     refactor!: breaking change"
+  echo "   올바른 예 (한글/영문/혼용 모두 허용):"
+  echo "     feat: basic enemy AI movement 구현"
+  echo "     fix(api): null response 처리 오류 수정"
+  echo "     data: orderbook v3 마이그레이션 추가"
+  echo "     refactor!: 전체 API 구조 개선 (breaking change)"
+  echo "     remove: unused asset 및 테스트 코드 삭제"
   exit 1
 fi
